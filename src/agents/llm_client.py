@@ -1,4 +1,5 @@
 import asyncio
+import os
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -44,8 +45,27 @@ class UnifiedLLMClient:
             genai.configure(api_key=self.google_key)
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
-    async def call_openai(self, prompt: str, model: str, temperature: float, max_tokens: int) -> LLMResponse:
-        if not self.openai_client:
+    async def call_openai(
+        self,
+        prompt: str,
+        model: str,
+        temperature: float,
+        max_tokens: int,
+        provider_config: dict[str, Any] | None = None,
+    ) -> LLMResponse:
+        provider_config = provider_config or {}
+        custom_base_url = provider_config.get("base_url")
+        custom_api_key = provider_config.get("api_key")
+        custom_api_key_env = provider_config.get("api_key_env")
+        if not custom_api_key and custom_api_key_env:
+            custom_api_key = os.getenv(str(custom_api_key_env), "")
+
+        client = self.openai_client
+        if custom_base_url:
+            effective_key = str(custom_api_key or self.openai_key or "EMPTY")
+            client = AsyncOpenAI(api_key=effective_key, base_url=str(custom_base_url))
+
+        if not client:
             raise RuntimeError("OPENAI_API_KEY is not configured")
 
         started = time.perf_counter()
@@ -211,10 +231,17 @@ class UnifiedLLMClient:
         model: str,
         temperature: float = 0.7,
         max_tokens: int = 1000,
+        provider_config: dict[str, Any] | None = None,
     ) -> LLMResponse:
         provider_key = provider.lower()
         if provider_key == "openai":
-            return await self.call_openai(prompt, model, temperature, max_tokens)
+            return await self.call_openai(
+                prompt,
+                model,
+                temperature,
+                max_tokens,
+                provider_config=provider_config,
+            )
         if provider_key == "anthropic":
             return await self.call_anthropic(prompt, model, temperature, max_tokens)
         if provider_key == "google":

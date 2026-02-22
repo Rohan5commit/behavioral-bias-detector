@@ -80,6 +80,7 @@ class BiasEvaluationOrchestrator:
                     model=agent.model_name,
                     temperature=agent.temperature,
                     max_tokens=agent.max_tokens,
+                    provider_config=agent.config or {},
                 )
                 action, confidence = self.bias_detector.extract_action_and_confidence(response.content)
                 bias_result = self._calculate_bias_for_scenario(scenario, response.content)
@@ -207,4 +208,3 @@ class BiasEvaluationOrchestrator:
             )
 
         return {"bias_score": 0.0}
-
